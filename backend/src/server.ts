@@ -6,12 +6,52 @@ import { loadConfig, getConfig, saveConfig } from "./config.js";
 import { discoverBridgeCameras } from "./bridge.js";
 import { getRuntimeStatus, restartPoller, runPoll, startPoller } from "./poller.js";
 import { listCameraSnapshots, safeCameraSlug, summarizeCameras } from "./storage.js";
+import type { AppConfig } from "./types.js";
 
 const port = Number(process.env.PORT ?? 8080);
 const app = express();
 
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
+
+async function mergeDiscoveredCameras(config: AppConfig): Promise<AppConfig> {
+  const discoveredCameras = await discoverBridgeCameras(config.bridgeUrl);
+  const consumedExistingCameras = new Set<number>();
+  const merged = new Map<string, AppConfig["cameras"][number]>();
+
+  for (const discoveredCamera of discoveredCameras) {
+    const existingIndex = config.cameras.findIndex((camera, index) => {
+      if (consumedExistingCameras.has(index)) {
+        return false;
+      }
+
+      return camera.nameUri === discoveredCamera.nameUri ||
+        camera.name === discoveredCamera.name ||
+        camera.name === discoveredCamera.nameUri;
+    });
+    const existingCamera = existingIndex >= 0 ? config.cameras[existingIndex] : undefined;
+    if (existingIndex >= 0) {
+      consumedExistingCameras.add(existingIndex);
+    }
+
+    merged.set(discoveredCamera.nameUri, {
+      name: discoveredCamera.name,
+      nameUri: discoveredCamera.nameUri,
+      enabled: existingCamera?.enabled ?? true
+    });
+  }
+
+  config.cameras.forEach((camera, index) => {
+    if (!consumedExistingCameras.has(index)) {
+      merged.set(camera.nameUri ?? camera.name, camera);
+    }
+  });
+
+  return saveConfig({
+    ...config,
+    cameras: [...merged.values()].sort((left, right) => left.name.localeCompare(right.name))
+  });
+}
 
 app.get("/api/config", (_request, response) => {
   response.json(getConfig());
@@ -36,17 +76,7 @@ app.put("/api/config", async (request, response, next) => {
 app.post("/api/discover", async (_request, response, next) => {
   try {
     const config = getConfig();
-    const discoveredCameras = await discoverBridgeCameras(config.bridgeUrl);
-    const configured = new Map(config.cameras.map((camera) => [camera.name, camera.enabled]));
-    const mergedNames = new Set([...config.cameras.map((camera) => camera.name), ...discoveredCameras.map((camera) => camera.name)]);
-
-    const nextConfig = await saveConfig({
-      ...config,
-      cameras: [...mergedNames].sort().map((name) => ({
-        name,
-        enabled: configured.get(name) ?? true
-      }))
-    });
+    const nextConfig = await mergeDiscoveredCameras(config);
 
     restartPoller();
     response.json(nextConfig);
@@ -116,7 +146,14 @@ app.use((error: unknown, _request: express.Request, response: express.Response, 
   response.status(500).json({ error: message });
 });
 
-await loadConfig();
+const loadedConfig = await loadConfig();
+if (loadedConfig.cameras.some((camera) => !camera.nameUri)) {
+  try {
+    await mergeDiscoveredCameras(loadedConfig);
+  } catch (error) {
+    console.warn("Unable to migrate camera URIs from bridge", error);
+  }
+}
 startPoller();
 
 app.listen(port, () => {

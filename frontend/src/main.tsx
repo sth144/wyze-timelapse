@@ -5,6 +5,7 @@ import "./styles.css";
 
 type CameraConfig = {
   name: string;
+  nameUri?: string;
   enabled: boolean;
 };
 

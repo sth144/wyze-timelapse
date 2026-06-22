@@ -1,6 +1,6 @@
 import { getConfig } from "./config.js";
 import { fetchSnapshot } from "./bridge.js";
-import { pruneOldSnapshots, saveSnapshot } from "./storage.js";
+import { pruneOldSnapshots, safeCameraSlug, saveSnapshot } from "./storage.js";
 import type { RuntimeStatus } from "./types.js";
 
 const status: RuntimeStatus = {
@@ -77,7 +77,7 @@ export async function runPoll(): Promise<void> {
       enabledCameras,
       config.pollConcurrency,
       async (camera) => {
-        const snapshot = await fetchSnapshot(config.bridgeUrl, camera.name);
+        const snapshot = await fetchSnapshot(config.bridgeUrl, camera.nameUri ?? safeCameraSlug(camera.name).toLowerCase());
         await saveSnapshot(config.dataDirectory, camera.name, snapshot, config.imageQuality, config.maxImageWidth);
       }
     );

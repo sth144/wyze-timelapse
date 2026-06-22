@@ -16,6 +16,7 @@ const configSchema = z.object({
   cameras: z.array(
     z.object({
       name: z.string().min(1),
+      nameUri: z.string().min(1).optional(),
       enabled: z.boolean()
     })
   )
