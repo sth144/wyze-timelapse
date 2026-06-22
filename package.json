@@ -1,0 +1,14 @@
+{
+  "name": "wyze-timelapse",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace backend && npm run build --workspace frontend",
+    "dev": "npm run dev --workspace backend",
+    "lint": "npm run typecheck --workspace backend && npm run typecheck --workspace frontend"
+  }
+}
