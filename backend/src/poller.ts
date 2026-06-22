@@ -78,6 +78,10 @@ export async function runPoll(): Promise<void> {
       config.pollConcurrency,
       async (camera) => {
         const snapshot = await fetchSnapshot(config.bridgeUrl, camera.nameUri ?? safeCameraSlug(camera.name).toLowerCase());
+        if (snapshot.byteLength < config.minSnapshotBytes) {
+          throw new Error(`Snapshot for ${camera.name} was too small (${snapshot.byteLength} bytes)`);
+        }
+
         await saveSnapshot(config.dataDirectory, camera.name, snapshot, config.imageQuality, config.maxImageWidth);
       }
     );

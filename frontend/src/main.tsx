@@ -16,6 +16,7 @@ type AppConfig = {
   bridgeUrl: string;
   imageQuality: number;
   maxImageWidth: number;
+  minSnapshotBytes: number;
   playbackFps: number;
   maxPlaybackFrames: number;
   pollConcurrency: number;
@@ -48,6 +49,7 @@ const emptyConfig: AppConfig = {
   bridgeUrl: "http://192.168.1.231:5000",
   imageQuality: 80,
   maxImageWidth: 1280,
+  minSnapshotBytes: 4096,
   playbackFps: 12,
   maxPlaybackFrames: 1000,
   pollConcurrency: 2,
@@ -277,6 +279,16 @@ function App() {
                 max={3840}
                 value={config.maxImageWidth}
                 onChange={(event) => setConfig({ ...config, maxImageWidth: Number(event.target.value) })}
+              />
+            </label>
+            <label>
+              Min bytes
+              <input
+                type="number"
+                min={0}
+                max={1000000}
+                value={config.minSnapshotBytes}
+                onChange={(event) => setConfig({ ...config, minSnapshotBytes: Number(event.target.value) })}
               />
             </label>
             <label>

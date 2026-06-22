@@ -32,6 +32,7 @@ The default settings are chosen to keep host impact modest:
 | Poll concurrency | `2` | Avoids requesting every camera at once |
 | JPEG quality | `80` | Cuts storage compared with original snapshots |
 | Max image width | `1280` | Reduces storage and CPU for browser playback |
+| Min snapshot bytes | `4096` | Skips tiny bridge placeholder/error frames |
 | Playback frame limit | `1000` | Prevents huge JSON responses and browser memory spikes |
 | Retention | `14 days` | Keeps archive growth bounded |
 
@@ -57,6 +58,7 @@ These environment variables seed the first config file:
 | `RETENTION_DAYS` | `14` |
 | `IMAGE_QUALITY` | `80` |
 | `MAX_IMAGE_WIDTH` | `1280` |
+| `MIN_SNAPSHOT_BYTES` | `4096` |
 | `MAX_PLAYBACK_FRAMES` | `1000` |
 | `POLL_CONCURRENCY` | `2` |
 

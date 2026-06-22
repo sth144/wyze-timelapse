@@ -11,6 +11,7 @@ export type AppConfig = {
   bridgeUrl: string;
   imageQuality: number;
   maxImageWidth: number;
+  minSnapshotBytes: number;
   playbackFps: number;
   maxPlaybackFrames: number;
   pollConcurrency: number;
