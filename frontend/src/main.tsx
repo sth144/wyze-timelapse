@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Camera, Pause, Play, RefreshCw, Save, Search, SkipBack, SkipForward } from "lucide-react";
+import { Camera, Download, Pause, Play, RefreshCw, Save, Search, SkipBack, SkipForward } from "lucide-react";
 import "./styles.css";
 
 type CameraConfig = {
@@ -95,6 +95,25 @@ function formatTimestamp(value: string | null): string {
   return new Date(value).toLocaleString();
 }
 
+function parseSnapshotTimestamp(fileName: string): string | null {
+  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})\.(\d{3})Z\.jpg$/.exec(fileName);
+  if (!match) {
+    return null;
+  }
+
+  const [, date, hour, minute, second, millisecond] = match;
+  return `${date}T${hour}:${minute}:${second}.${millisecond}Z`;
+}
+
+function formatFrameTime(fileName: string | undefined): string {
+  if (!fileName) {
+    return "No frame";
+  }
+
+  const timestamp = parseSnapshotTimestamp(fileName);
+  return timestamp ? new Date(timestamp).toLocaleString() : fileName;
+}
+
 function App() {
   const [config, setConfig] = useState<AppConfig>(emptyConfig);
   const [status, setStatus] = useState<RuntimeStatus | null>(null);
@@ -102,11 +121,20 @@ function App() {
   const [selectedCamera, setSelectedCamera] = useState<string>("");
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [frameIndex, setFrameIndex] = useState(0);
+  const [rangeStartIndex, setRangeStartIndex] = useState(0);
+  const [rangeEndIndex, setRangeEndIndex] = useState(0);
+  const [exportFps, setExportFps] = useState(12);
+  const [previewingRange, setPreviewingRange] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [message, setMessage] = useState<string>("");
 
   const selectedSummary = cameras.find((cameraSummary) => cameraSummary.name === selectedCamera);
   const currentFrame = snapshots[frameIndex] ?? null;
+  const rangeStart = Math.min(rangeStartIndex, rangeEndIndex);
+  const rangeEnd = Math.max(rangeStartIndex, rangeEndIndex);
+  const selectedRangeFrames = snapshots.slice(rangeStart, rangeEnd + 1);
+  const selectedRangeStart = selectedRangeFrames[0];
+  const selectedRangeEnd = selectedRangeFrames.at(-1);
 
   const enabledCount = useMemo(
     () => config.cameras.filter((cameraConfig) => cameraConfig.enabled).length,
@@ -155,6 +183,37 @@ function App() {
     setStatus(nextStatus);
     setMessage("Poll completed");
     await refreshAll();
+  }
+
+  function startRangePreview() {
+    if (selectedRangeFrames.length === 0) {
+      return;
+    }
+
+    setFrameIndex(rangeStart);
+    setPreviewingRange(true);
+    setPlaying(true);
+  }
+
+  function stopRangePreview() {
+    setPreviewingRange(false);
+    setPlaying(false);
+  }
+
+  function exportRange() {
+    const start = parseSnapshotTimestamp(selectedRangeStart?.fileName ?? "");
+    const end = parseSnapshotTimestamp(selectedRangeEnd?.fileName ?? "");
+    if (!selectedCamera || !start || !end || selectedRangeFrames.length === 0) {
+      return;
+    }
+
+    const params = new URLSearchParams({
+      start,
+      end,
+      fps: String(exportFps),
+      limit: String(selectedRangeFrames.length)
+    });
+    window.location.href = `/api/cameras/${encodeURIComponent(selectedCamera)}/export.mp4?${params.toString()}`;
   }
 
   function updateCamera(name: string, enabled: boolean) {
@@ -209,6 +268,9 @@ function App() {
 
         setSnapshots(nextSnapshots);
         setFrameIndex(Math.max(0, nextSnapshots.length - 1));
+        setRangeStartIndex(0);
+        setRangeEndIndex(Math.max(0, nextSnapshots.length - 1));
+        setPreviewingRange(false);
       })
       .catch((error) => setMessage(error.message));
 
@@ -223,11 +285,17 @@ function App() {
     }
 
     const timer = window.setInterval(() => {
-      setFrameIndex((current) => (current + 1) % snapshots.length);
-    }, 1000 / config.playbackFps);
+      setFrameIndex((current) => {
+        if (!previewingRange) {
+          return (current + 1) % snapshots.length;
+        }
+
+        return current >= rangeEnd ? rangeStart : current + 1;
+      });
+    }, 1000 / (previewingRange ? exportFps : config.playbackFps));
 
     return () => window.clearInterval(timer);
-  }, [playing, snapshots.length, config.playbackFps]);
+  }, [playing, snapshots.length, config.playbackFps, previewingRange, rangeStart, rangeEnd, exportFps]);
 
   return (
     <main className="app-shell">
@@ -458,6 +526,76 @@ function App() {
             />
             <span>{currentFrame?.fileName ?? "No frame"}</span>
           </div>
+
+          <section className="export-panel">
+            <div className="export-header">
+              <div>
+                <h2>Export MP4</h2>
+                <p>{selectedRangeFrames.length} selected frames</p>
+              </div>
+              <div className="export-actions">
+                <button
+                  type="button"
+                  onClick={previewingRange ? stopRangePreview : startRangePreview}
+                  disabled={selectedRangeFrames.length === 0}
+                  title={previewingRange ? "Stop preview" : "Preview selected range"}
+                >
+                  {previewingRange ? <Pause size={18} /> : <Play size={18} />}
+                  {previewingRange ? "Stop" : "Preview"}
+                </button>
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={exportRange}
+                  disabled={selectedRangeFrames.length === 0}
+                  title="Export selected range"
+                >
+                  <Download size={18} />
+                  Export
+                </button>
+              </div>
+            </div>
+            <div className="range-shell">
+              <input
+                aria-label="Export range start"
+                type="range"
+                min={0}
+                max={Math.max(0, snapshots.length - 1)}
+                value={rangeStartIndex}
+                onChange={(event) => setRangeStartIndex(Math.min(Number(event.target.value), rangeEndIndex))}
+                disabled={snapshots.length === 0}
+              />
+              <input
+                aria-label="Export range end"
+                type="range"
+                min={0}
+                max={Math.max(0, snapshots.length - 1)}
+                value={rangeEndIndex}
+                onChange={(event) => setRangeEndIndex(Math.max(Number(event.target.value), rangeStartIndex))}
+                disabled={snapshots.length === 0}
+              />
+            </div>
+            <div className="export-fields">
+              <label>
+                Start
+                <output>{formatFrameTime(selectedRangeStart?.fileName)}</output>
+              </label>
+              <label>
+                End
+                <output>{formatFrameTime(selectedRangeEnd?.fileName)}</output>
+              </label>
+              <label>
+                Export FPS
+                <input
+                  type="number"
+                  min={1}
+                  max={60}
+                  value={exportFps}
+                  onChange={(event) => setExportFps(Math.min(60, Math.max(1, Number(event.target.value))))}
+                />
+              </label>
+            </div>
+          </section>
 
           <div className="camera-grid">
             {cameras.map((cameraSummary) => (

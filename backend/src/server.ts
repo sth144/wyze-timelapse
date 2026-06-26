@@ -4,11 +4,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig, getConfig, saveConfig } from "./config.js";
 import { discoverBridgeCameras } from "./bridge.js";
+import { streamMp4Export } from "./exportVideo.js";
 import { getRuntimeStatus, restartPoller, runPoll, startPoller } from "./poller.js";
-import { listCameraSnapshots, safeCameraSlug, summarizeCameras } from "./storage.js";
+import { listCameraSnapshots, listCameraSnapshotsInRange, safeCameraSlug, summarizeCameras } from "./storage.js";
 import type { AppConfig } from "./types.js";
 
 const port = Number(process.env.PORT ?? 8080);
+const maxExportFrames = 5000;
 const app = express();
 
 app.use(cors());
@@ -107,6 +109,30 @@ app.get("/api/cameras", async (_request, response, next) => {
   }
 });
 
+app.get("/api/cameras/:cameraName/snapshots/range", async (request, response, next) => {
+  try {
+    const config = getConfig();
+    const cameraName = request.params.cameraName;
+    const startMs = Date.parse(String(request.query.start ?? ""));
+    const endMs = Date.parse(String(request.query.end ?? ""));
+    const requestedLimit = Number(request.query.limit ?? maxExportFrames);
+    const limit = Math.min(Math.max(1, requestedLimit), maxExportFrames);
+
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) {
+      response.status(400).json({ error: "Valid start and end query parameters are required" });
+      return;
+    }
+
+    const snapshots = await listCameraSnapshotsInRange(config.dataDirectory, cameraName, startMs, endMs, limit);
+    response.json(snapshots.map(({ filePath: _filePath, timestampMs, ...snapshot }) => ({
+      ...snapshot,
+      timestamp: new Date(timestampMs).toISOString()
+    })));
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get("/api/cameras/:cameraName/snapshots", async (request, response, next) => {
   try {
     const config = getConfig();
@@ -115,6 +141,51 @@ app.get("/api/cameras/:cameraName/snapshots", async (request, response, next) =>
     const limit = Math.min(Math.max(1, requestedLimit), config.maxPlaybackFrames);
     response.json(await listCameraSnapshots(config.dataDirectory, cameraName, limit));
   } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/cameras/:cameraName/export.mp4", async (request, response, next) => {
+  try {
+    const config = getConfig();
+    const cameraName = request.params.cameraName;
+    const startMs = Date.parse(String(request.query.start ?? ""));
+    const endMs = Date.parse(String(request.query.end ?? ""));
+    const requestedFps = Number(request.query.fps ?? config.playbackFps);
+    const fps = Math.min(Math.max(1, Math.floor(requestedFps)), 60);
+    const requestedLimit = Number(request.query.limit ?? maxExportFrames);
+    const limit = Math.min(Math.max(1, requestedLimit), maxExportFrames);
+
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) {
+      response.status(400).json({ error: "Valid start and end query parameters are required" });
+      return;
+    }
+
+    const snapshots = await listCameraSnapshotsInRange(config.dataDirectory, cameraName, startMs, endMs, limit);
+    if (snapshots.length === 0) {
+      response.status(404).json({ error: "No frames found for export range" });
+      return;
+    }
+
+    const fileSafeCameraName = safeCameraSlug(cameraName);
+    const startLabel = new Date(startMs).toISOString().replace(/[:.]/g, "-");
+    const endLabel = new Date(endMs).toISOString().replace(/[:.]/g, "-");
+
+    response.setHeader("Content-Type", "video/mp4");
+    response.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${fileSafeCameraName}-${startLabel}-${endLabel}.mp4"`
+    );
+    response.setHeader("Cache-Control", "no-store");
+
+    await streamMp4Export(snapshots, fps, response);
+  } catch (error) {
+    if (response.headersSent) {
+      console.error("MP4 export failed", error);
+      response.end();
+      return;
+    }
+
     next(error);
   }
 });

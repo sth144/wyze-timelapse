@@ -261,6 +261,107 @@ select {
   overflow-wrap: anywhere;
 }
 
+.export-panel {
+  border-bottom: 1px solid #edf1f5;
+  border-top: 1px solid #edf1f5;
+  display: grid;
+  gap: 12px;
+  margin: 14px 0;
+  padding: 14px 0;
+}
+
+.export-header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.range-shell {
+  display: grid;
+  min-height: 38px;
+  position: relative;
+}
+
+.range-shell::before {
+  background: #d9e0e8;
+  border-radius: 999px;
+  content: "";
+  height: 6px;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 16px;
+}
+
+.range-shell input[type="range"] {
+  appearance: none;
+  background: transparent;
+  grid-area: 1 / 1;
+  min-height: 38px;
+  padding: 0;
+  pointer-events: none;
+}
+
+.range-shell input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  background: #146c5d;
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  box-shadow: 0 1px 4px rgba(24, 33, 47, 0.28);
+  cursor: grab;
+  height: 20px;
+  pointer-events: auto;
+  width: 20px;
+}
+
+.range-shell input[type="range"]::-moz-range-thumb {
+  background: #146c5d;
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  box-shadow: 0 1px 4px rgba(24, 33, 47, 0.28);
+  cursor: grab;
+  height: 16px;
+  pointer-events: auto;
+  width: 16px;
+}
+
+.range-shell input[type="range"]::-webkit-slider-runnable-track {
+  background: transparent;
+  height: 6px;
+}
+
+.range-shell input[type="range"]::-moz-range-track {
+  background: transparent;
+  height: 6px;
+}
+
+.export-fields {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 120px;
+}
+
+.export-fields output {
+  align-items: center;
+  background: #f6f8fa;
+  border: 1px solid #d9e0e8;
+  border-radius: 6px;
+  color: #18212f;
+  display: flex;
+  font-size: 13px;
+  min-height: 38px;
+  overflow-wrap: anywhere;
+  padding: 8px 10px;
+}
+
 .camera-grid {
   display: grid;
   gap: 12px;
@@ -337,6 +438,24 @@ select {
 
   .playback-controls span {
     grid-column: 1 / -1;
+  }
+
+  .export-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .export-actions {
+    justify-content: stretch;
+  }
+
+  .export-actions button {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .export-fields {
+    grid-template-columns: 1fr;
   }
 }
 

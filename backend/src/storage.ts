@@ -13,6 +13,11 @@ export type SnapshotRef = {
   url: string;
 };
 
+export type SnapshotFileRef = SnapshotRef & {
+  filePath: string;
+  timestampMs: number;
+};
+
 export function safeCameraSlug(name: string): string {
   return name
     .trim()
@@ -24,6 +29,10 @@ export function safeCameraSlug(name: string): string {
 export function snapshotRelativePath(cameraName: string, fileName: string): string {
   const date = fileName.slice(0, 10);
   return `/api/images/${encodeURIComponent(safeCameraSlug(cameraName))}/${encodeURIComponent(date)}/${encodeURIComponent(fileName)}`;
+}
+
+export function snapshotFilePath(dataDirectory: string, cameraName: string, fileName: string): string {
+  return path.join(dataDirectory, safeCameraSlug(cameraName), fileName.slice(0, 10), fileName);
 }
 
 export async function saveSnapshot(
@@ -92,6 +101,56 @@ export async function listCameraSnapshots(dataDirectory: string, cameraName: str
   }
 
   return snapshots.reverse();
+}
+
+export async function listCameraSnapshotsInRange(
+  dataDirectory: string,
+  cameraName: string,
+  startMs: number,
+  endMs: number,
+  limit: number
+): Promise<SnapshotFileRef[]> {
+  const cameraDirectory = path.join(dataDirectory, safeCameraSlug(cameraName));
+  const dateDirectories = await listDateDirectories(cameraDirectory);
+  const snapshots: SnapshotFileRef[] = [];
+
+  for (const date of dateDirectories) {
+    const dayStartMs = new Date(`${date}T00:00:00.000Z`).getTime();
+    const dayEndMs = dayStartMs + 24 * 60 * 60 * 1000 - 1;
+    if (dayEndMs < startMs || dayStartMs > endMs) {
+      continue;
+    }
+
+    const entries = (await readdir(path.join(cameraDirectory, date)))
+      .filter((entry) => jpgFilePattern.test(entry))
+      .sort();
+
+    for (const fileName of entries) {
+      const timestamp = parseSnapshotDate(fileName);
+      if (!timestamp) {
+        continue;
+      }
+
+      const timestampMs = timestamp.getTime();
+      if (timestampMs < startMs || timestampMs > endMs) {
+        continue;
+      }
+
+      snapshots.push({
+        fileName,
+        date,
+        timestampMs,
+        filePath: snapshotFilePath(dataDirectory, cameraName, fileName),
+        url: snapshotRelativePath(cameraName, fileName)
+      });
+
+      if (snapshots.length >= limit) {
+        return snapshots;
+      }
+    }
+  }
+
+  return snapshots;
 }
 
 async function countCameraSnapshots(dataDirectory: string, cameraName: string): Promise<number> {
