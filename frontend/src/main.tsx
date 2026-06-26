@@ -124,6 +124,7 @@ function App() {
   const [rangeStartIndex, setRangeStartIndex] = useState(0);
   const [rangeEndIndex, setRangeEndIndex] = useState(0);
   const [exportFps, setExportFps] = useState(12);
+  const [exportMode, setExportMode] = useState(false);
   const [previewingRange, setPreviewingRange] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [message, setMessage] = useState<string>("");
@@ -183,6 +184,36 @@ function App() {
     setStatus(nextStatus);
     setMessage("Poll completed");
     await refreshAll();
+  }
+
+  function enterExportMode() {
+    if (snapshots.length === 0) {
+      return;
+    }
+
+    setPlaying(false);
+    setPreviewingRange(false);
+    setRangeStartIndex(0);
+    setRangeEndIndex(Math.max(0, snapshots.length - 1));
+    setExportMode(true);
+  }
+
+  function exitExportMode() {
+    setPlaying(false);
+    setPreviewingRange(false);
+    setExportMode(false);
+  }
+
+  function updateRangeStart(nextIndex: number) {
+    const boundedIndex = Math.min(nextIndex, rangeEndIndex);
+    setRangeStartIndex(boundedIndex);
+    setFrameIndex(boundedIndex);
+  }
+
+  function updateRangeEnd(nextIndex: number) {
+    const boundedIndex = Math.max(nextIndex, rangeStartIndex);
+    setRangeEndIndex(boundedIndex);
+    setFrameIndex(boundedIndex);
   }
 
   function startRangePreview() {
@@ -270,6 +301,7 @@ function App() {
         setFrameIndex(Math.max(0, nextSnapshots.length - 1));
         setRangeStartIndex(0);
         setRangeEndIndex(Math.max(0, nextSnapshots.length - 1));
+        setExportMode(false);
         setPreviewingRange(false);
       })
       .catch((error) => setMessage(error.message));
@@ -496,96 +528,51 @@ function App() {
             )}
           </div>
 
-          <div className="playback-controls">
-            <button type="button" onClick={() => setFrameIndex(0)} disabled={snapshots.length === 0} title="First frame">
-              <SkipBack size={18} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setPlaying((current) => !current)}
-              disabled={snapshots.length === 0}
-              title={playing ? "Pause" : "Play"}
-            >
-              {playing ? <Pause size={18} /> : <Play size={18} />}
-            </button>
-            <button
-              type="button"
-              onClick={() => setFrameIndex(Math.max(0, snapshots.length - 1))}
-              disabled={snapshots.length === 0}
-              title="Latest frame"
-            >
-              <SkipForward size={18} />
-            </button>
-            <input
-              type="range"
-              min={0}
-              max={Math.max(0, snapshots.length - 1)}
-              value={frameIndex}
-              onChange={(event) => setFrameIndex(Number(event.target.value))}
-              disabled={snapshots.length === 0}
-            />
-            <span>{currentFrame?.fileName ?? "No frame"}</span>
-          </div>
-
-          <section className="export-panel">
-            <div className="export-header">
-              <div>
-                <h2>Export MP4</h2>
-                <p>{selectedRangeFrames.length} selected frames</p>
+          {exportMode ? (
+            <div className="playback-controls export-controls">
+              <button
+                type="button"
+                onClick={previewingRange ? stopRangePreview : startRangePreview}
+                disabled={selectedRangeFrames.length === 0}
+                title={previewingRange ? "Stop preview" : "Preview selected range"}
+              >
+                {previewingRange ? <Pause size={18} /> : <Play size={18} />}
+              </button>
+              <button type="button" onClick={exitExportMode} title="Exit export mode">
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="primary"
+                onClick={exportRange}
+                disabled={selectedRangeFrames.length === 0}
+                title="Export selected range"
+              >
+                <Download size={18} />
+                Export
+              </button>
+              <div className="range-shell">
+                <input
+                  aria-label="Export range start"
+                  type="range"
+                  min={0}
+                  max={Math.max(0, snapshots.length - 1)}
+                  value={rangeStartIndex}
+                  onChange={(event) => updateRangeStart(Number(event.target.value))}
+                  disabled={snapshots.length === 0}
+                />
+                <input
+                  aria-label="Export range end"
+                  type="range"
+                  min={0}
+                  max={Math.max(0, snapshots.length - 1)}
+                  value={rangeEndIndex}
+                  onChange={(event) => updateRangeEnd(Number(event.target.value))}
+                  disabled={snapshots.length === 0}
+                />
               </div>
-              <div className="export-actions">
-                <button
-                  type="button"
-                  onClick={previewingRange ? stopRangePreview : startRangePreview}
-                  disabled={selectedRangeFrames.length === 0}
-                  title={previewingRange ? "Stop preview" : "Preview selected range"}
-                >
-                  {previewingRange ? <Pause size={18} /> : <Play size={18} />}
-                  {previewingRange ? "Stop" : "Preview"}
-                </button>
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={exportRange}
-                  disabled={selectedRangeFrames.length === 0}
-                  title="Export selected range"
-                >
-                  <Download size={18} />
-                  Export
-                </button>
-              </div>
-            </div>
-            <div className="range-shell">
-              <input
-                aria-label="Export range start"
-                type="range"
-                min={0}
-                max={Math.max(0, snapshots.length - 1)}
-                value={rangeStartIndex}
-                onChange={(event) => setRangeStartIndex(Math.min(Number(event.target.value), rangeEndIndex))}
-                disabled={snapshots.length === 0}
-              />
-              <input
-                aria-label="Export range end"
-                type="range"
-                min={0}
-                max={Math.max(0, snapshots.length - 1)}
-                value={rangeEndIndex}
-                onChange={(event) => setRangeEndIndex(Math.max(Number(event.target.value), rangeStartIndex))}
-                disabled={snapshots.length === 0}
-              />
-            </div>
-            <div className="export-fields">
-              <label>
-                Start
-                <output>{formatFrameTime(selectedRangeStart?.fileName)}</output>
-              </label>
-              <label>
-                End
-                <output>{formatFrameTime(selectedRangeEnd?.fileName)}</output>
-              </label>
-              <label>
-                Export FPS
+              <label className="fps-field">
+                FPS
                 <input
                   type="number"
                   min={1}
@@ -594,8 +581,46 @@ function App() {
                   onChange={(event) => setExportFps(Math.min(60, Math.max(1, Number(event.target.value))))}
                 />
               </label>
+              <span>
+                {selectedRangeFrames.length} frames · {formatFrameTime(selectedRangeStart?.fileName)} to {formatFrameTime(selectedRangeEnd?.fileName)}
+              </span>
             </div>
-          </section>
+          ) : (
+            <div className="playback-controls">
+              <button type="button" onClick={() => setFrameIndex(0)} disabled={snapshots.length === 0} title="First frame">
+                <SkipBack size={18} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setPlaying((current) => !current)}
+                disabled={snapshots.length === 0}
+                title={playing ? "Pause" : "Play"}
+              >
+                {playing ? <Pause size={18} /> : <Play size={18} />}
+              </button>
+              <button
+                type="button"
+                onClick={() => setFrameIndex(Math.max(0, snapshots.length - 1))}
+                disabled={snapshots.length === 0}
+                title="Latest frame"
+              >
+                <SkipForward size={18} />
+              </button>
+              <input
+                type="range"
+                min={0}
+                max={Math.max(0, snapshots.length - 1)}
+                value={frameIndex}
+                onChange={(event) => setFrameIndex(Number(event.target.value))}
+                disabled={snapshots.length === 0}
+              />
+              <button type="button" onClick={enterExportMode} disabled={snapshots.length === 0} title="Enter export mode">
+                <Download size={18} />
+                Export
+              </button>
+              <span>{currentFrame?.fileName ?? "No frame"}</span>
+            </div>
+          )}
 
           <div className="camera-grid">
             {cameras.map((cameraSummary) => (

@@ -245,7 +245,7 @@ select {
   align-items: center;
   display: grid;
   gap: 10px;
-  grid-template-columns: auto auto auto minmax(160px, 1fr) minmax(220px, auto);
+  grid-template-columns: auto auto auto minmax(160px, 1fr) auto minmax(220px, auto);
   margin: 14px 0;
 }
 
@@ -261,27 +261,8 @@ select {
   overflow-wrap: anywhere;
 }
 
-.export-panel {
-  border-bottom: 1px solid #edf1f5;
-  border-top: 1px solid #edf1f5;
-  display: grid;
-  gap: 12px;
-  margin: 14px 0;
-  padding: 14px 0;
-}
-
-.export-header {
-  align-items: center;
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
-}
-
-.export-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: flex-end;
+.export-controls {
+  grid-template-columns: auto auto auto minmax(180px, 1fr) 86px minmax(260px, auto);
 }
 
 .range-shell {
@@ -343,23 +324,17 @@ select {
   height: 6px;
 }
 
-.export-fields {
+.fps-field {
+  align-items: center;
+  color: #526174;
   display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 120px;
+  gap: 4px;
+  grid-template-columns: auto 1fr;
 }
 
-.export-fields output {
-  align-items: center;
-  background: #f6f8fa;
-  border: 1px solid #d9e0e8;
-  border-radius: 6px;
-  color: #18212f;
-  display: flex;
-  font-size: 13px;
+.fps-field input {
   min-height: 38px;
-  overflow-wrap: anywhere;
-  padding: 8px 10px;
+  padding: 6px 8px;
 }
 
 .camera-grid {
@@ -432,7 +407,8 @@ select {
     max-width: none;
   }
 
-  .playback-controls {
+  .playback-controls,
+  .export-controls {
     grid-template-columns: auto auto auto 1fr;
   }
 
@@ -440,22 +416,8 @@ select {
     grid-column: 1 / -1;
   }
 
-  .export-header {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .export-actions {
-    justify-content: stretch;
-  }
-
-  .export-actions button {
-    flex: 1;
-    justify-content: center;
-  }
-
-  .export-fields {
-    grid-template-columns: 1fr;
+  .export-controls .fps-field {
+    grid-column: 1 / -1;
   }
 }
 
