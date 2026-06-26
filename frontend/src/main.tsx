@@ -9,9 +9,17 @@ type CameraConfig = {
   enabled: boolean;
 };
 
+type RetentionTier = {
+  maxAgeDays: number | null;
+  intervalSeconds: number;
+};
+
 type AppConfig = {
   pollIntervalSeconds: number;
   retentionDays: number;
+  retentionTargetTime: string;
+  retentionTimeZone: string;
+  retentionTiers: RetentionTier[];
   dataDirectory: string;
   bridgeUrl: string;
   imageQuality: number;
@@ -44,7 +52,16 @@ type Snapshot = {
 
 const emptyConfig: AppConfig = {
   pollIntervalSeconds: 30,
-  retentionDays: 14,
+  retentionDays: 1825,
+  retentionTargetTime: "12:00",
+  retentionTimeZone: "America/Chicago",
+  retentionTiers: [
+    { maxAgeDays: 14, intervalSeconds: 30 },
+    { maxAgeDays: 60, intervalSeconds: 300 },
+    { maxAgeDays: 180, intervalSeconds: 1800 },
+    { maxAgeDays: 365, intervalSeconds: 3600 },
+    { maxAgeDays: null, intervalSeconds: 86400 }
+  ],
   dataDirectory: "/images",
   bridgeUrl: "http://192.168.1.231:5000",
   imageQuality: 80,
@@ -273,6 +290,21 @@ function App() {
                 max={3650}
                 value={config.retentionDays}
                 onChange={(event) => setConfig({ ...config, retentionDays: Number(event.target.value) })}
+              />
+            </label>
+            <label>
+              Daily frame time
+              <input
+                type="time"
+                value={config.retentionTargetTime}
+                onChange={(event) => setConfig({ ...config, retentionTargetTime: event.target.value })}
+              />
+            </label>
+            <label>
+              Retention timezone
+              <input
+                value={config.retentionTimeZone}
+                onChange={(event) => setConfig({ ...config, retentionTimeZone: event.target.value })}
               />
             </label>
             <label>

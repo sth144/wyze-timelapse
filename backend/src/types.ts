@@ -7,6 +7,9 @@ export type CameraConfig = {
 export type AppConfig = {
   pollIntervalSeconds: number;
   retentionDays: number;
+  retentionTargetTime: string;
+  retentionTimeZone: string;
+  retentionTiers: RetentionTier[];
   dataDirectory: string;
   bridgeUrl: string;
   imageQuality: number;
@@ -16,6 +19,11 @@ export type AppConfig = {
   maxPlaybackFrames: number;
   pollConcurrency: number;
   cameras: CameraConfig[];
+};
+
+export type RetentionTier = {
+  maxAgeDays: number | null;
+  intervalSeconds: number;
 };
 
 export type RuntimeStatus = {

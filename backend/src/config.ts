@@ -3,9 +3,25 @@ import path from "node:path";
 import { z } from "zod";
 import type { AppConfig } from "./types.js";
 
+const defaultRetentionTiers = [
+  { maxAgeDays: 14, intervalSeconds: 30 },
+  { maxAgeDays: 60, intervalSeconds: 300 },
+  { maxAgeDays: 180, intervalSeconds: 1800 },
+  { maxAgeDays: 365, intervalSeconds: 3600 },
+  { maxAgeDays: null, intervalSeconds: 86400 }
+];
+
 const configSchema = z.object({
   pollIntervalSeconds: z.number().int().min(5).max(3600),
   retentionDays: z.number().int().min(1).max(3650),
+  retentionTargetTime: z.string().regex(/^\d{2}:\d{2}$/).default("12:00"),
+  retentionTimeZone: z.string().min(1).default(process.env.TZ ?? "America/Chicago"),
+  retentionTiers: z.array(
+    z.object({
+      maxAgeDays: z.number().int().min(0).max(3650).nullable(),
+      intervalSeconds: z.number().int().min(5).max(86400)
+    })
+  ).min(1).default(defaultRetentionTiers),
   dataDirectory: z.string().min(1),
   bridgeUrl: z.string().url(),
   imageQuality: z.number().int().min(10).max(100),
@@ -28,7 +44,10 @@ export const CONFIG_PATH = path.join(CONFIG_DIR, "config.json");
 
 export const defaultConfig: AppConfig = {
   pollIntervalSeconds: Number(process.env.POLL_INTERVAL_SECONDS ?? 30),
-  retentionDays: Number(process.env.RETENTION_DAYS ?? 14),
+  retentionDays: Number(process.env.RETENTION_DAYS ?? 1825),
+  retentionTargetTime: process.env.RETENTION_TARGET_TIME ?? "12:00",
+  retentionTimeZone: process.env.RETENTION_TIME_ZONE ?? process.env.TZ ?? "America/Chicago",
+  retentionTiers: defaultRetentionTiers,
   dataDirectory: process.env.DATA_DIR ?? "/images",
   bridgeUrl: process.env.WYZE_BRIDGE_URL ?? "http://192.168.1.231:5000",
   imageQuality: Number(process.env.IMAGE_QUALITY ?? 80),

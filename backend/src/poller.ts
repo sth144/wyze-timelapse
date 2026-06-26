@@ -1,6 +1,6 @@
 import { getConfig } from "./config.js";
 import { fetchSnapshot } from "./bridge.js";
-import { pruneOldSnapshots, safeCameraSlug, saveSnapshot } from "./storage.js";
+import { applySnapshotRetention, safeCameraSlug, saveSnapshot } from "./storage.js";
 import type { RuntimeStatus } from "./types.js";
 
 const status: RuntimeStatus = {
@@ -88,7 +88,12 @@ export async function runPoll(): Promise<void> {
 
     const now = Date.now();
     if (now - lastRetentionRun > 60 * 60 * 1000) {
-      await pruneOldSnapshots(config.dataDirectory, config.retentionDays);
+      await applySnapshotRetention(config.dataDirectory, {
+        retentionDays: config.retentionDays,
+        retentionTargetTime: config.retentionTargetTime,
+        retentionTimeZone: config.retentionTimeZone,
+        retentionTiers: config.retentionTiers
+      });
       lastRetentionRun = now;
     }
 

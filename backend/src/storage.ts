@@ -1,10 +1,11 @@
 import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
-import type { CameraSummary } from "./types.js";
+import type { CameraSummary, RetentionTier } from "./types.js";
 
 const jpgFilePattern = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.\d{3}Z\.jpg$/;
 const dateDirectoryPattern = /^\d{4}-\d{2}-\d{2}$/;
+const snapshotFilePattern = /^(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})\.(\d{3})Z\.jpg$/;
 
 export type SnapshotRef = {
   fileName: string;
@@ -125,8 +126,119 @@ export async function summarizeCameras(
   );
 }
 
-export async function pruneOldSnapshots(dataDirectory: string, retentionDays: number): Promise<number> {
+type SnapshotRetentionOptions = {
+  retentionDays: number;
+  retentionTargetTime: string;
+  retentionTimeZone: string;
+  retentionTiers: RetentionTier[];
+};
+
+function parseSnapshotDate(fileName: string): Date | null {
+  const match = snapshotFilePattern.exec(fileName);
+  if (!match) {
+    return null;
+  }
+
+  const [, year, month, day, hour, minute, second, millisecond] = match;
+  return new Date(Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second),
+    Number(millisecond)
+  ));
+}
+
+function parseTimeSeconds(value: string): number {
+  const [hour, minute] = value.split(":").map(Number);
+  return hour * 60 * 60 + minute * 60;
+}
+
+function getLocalTimeParts(date: Date, timeZone: string): { dayKey: string; seconds: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  }).formatToParts(date);
+
+  const values = new Map(parts.map((part) => [part.type, part.value]));
+  const dayKey = `${values.get("year")}-${values.get("month")}-${values.get("day")}`;
+  let hour = Number(values.get("hour"));
+  if (hour === 24) {
+    hour = 0;
+  }
+
+  return {
+    dayKey,
+    seconds: hour * 60 * 60 + Number(values.get("minute")) * 60 + Number(values.get("second"))
+  };
+}
+
+function chooseRetentionTier(ageDays: number, tiers: RetentionTier[]): RetentionTier {
+  return tiers.find((tier) => tier.maxAgeDays === null || ageDays <= tier.maxAgeDays) ?? tiers[tiers.length - 1];
+}
+
+function selectEntriesToKeep(
+  fileNames: string[],
+  intervalSeconds: number,
+  targetSeconds: number,
+  timeZone: string
+): Set<string> {
+  const keep = new Set<string>();
+  const groups = new Map<string, { fileName: string; score: number }>();
+
+  for (const fileName of fileNames) {
+    const timestamp = parseSnapshotDate(fileName);
+    if (!timestamp) {
+      continue;
+    }
+
+    const localTime = getLocalTimeParts(timestamp, timeZone);
+    const groupKey = intervalSeconds >= 86400
+      ? localTime.dayKey
+      : `${localTime.dayKey}:${Math.floor(localTime.seconds / intervalSeconds)}`;
+    const bucketTargetSeconds = intervalSeconds >= 86400
+      ? targetSeconds
+      : Math.floor(localTime.seconds / intervalSeconds) * intervalSeconds;
+    const score = Math.abs(localTime.seconds - bucketTargetSeconds);
+    const current = groups.get(groupKey);
+
+    if (!current || score < current.score) {
+      groups.set(groupKey, { fileName, score });
+    }
+  }
+
+  for (const entry of groups.values()) {
+    keep.add(entry.fileName);
+  }
+
+  return keep;
+}
+
+export async function applySnapshotRetention(
+  dataDirectory: string,
+  options: SnapshotRetentionOptions
+): Promise<number> {
+  const retentionDays = options.retentionDays;
   const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+  const targetSeconds = parseTimeSeconds(options.retentionTargetTime);
+  const retentionTiers = [...options.retentionTiers].sort((left, right) => {
+    if (left.maxAgeDays === null) {
+      return 1;
+    }
+    if (right.maxAgeDays === null) {
+      return -1;
+    }
+
+    return left.maxAgeDays - right.maxAgeDays;
+  });
   let deleted = 0;
 
   let cameraDirectories: string[];
@@ -153,6 +265,25 @@ export async function pruneOldSnapshots(dataDirectory: string, retentionDays: nu
       const dateTime = new Date(`${date}T00:00:00.000Z`).getTime();
 
       if (dateTime >= cutoff) {
+        const ageDays = Math.max(0, Math.floor((Date.now() - dateTime) / (24 * 60 * 60 * 1000)));
+        const tier = chooseRetentionTier(ageDays, retentionTiers);
+        const entries = (await readdir(fullDateDirectory))
+          .filter((entry) => jpgFilePattern.test(entry))
+          .sort();
+        const keep = selectEntriesToKeep(
+          entries,
+          tier.intervalSeconds,
+          targetSeconds,
+          options.retentionTimeZone
+        );
+
+        for (const entry of entries) {
+          if (!keep.has(entry)) {
+            await rm(path.join(fullDateDirectory, entry), { force: true });
+            deleted += 1;
+          }
+        }
+
         continue;
       }
 
