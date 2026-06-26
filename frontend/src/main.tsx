@@ -107,9 +107,13 @@ function App() {
     setStatus(nextStatus);
     setCameras(nextCameras);
 
-    if (!selectedCamera && nextCameras.length > 0) {
-      setSelectedCamera(nextCameras[0].name);
-    }
+    setSelectedCamera((currentSelectedCamera) => {
+      if (nextCameras.some((cameraSummary) => cameraSummary.name === currentSelectedCamera)) {
+        return currentSelectedCamera;
+      }
+
+      return nextCameras[0]?.name ?? "";
+    });
   }
 
   async function saveConfig() {
@@ -178,12 +182,22 @@ function App() {
       return;
     }
 
+    let active = true;
+
     api<Snapshot[]>(`/api/cameras/${encodeURIComponent(selectedCamera)}/snapshots?limit=${config.maxPlaybackFrames}`)
       .then((nextSnapshots) => {
+        if (!active) {
+          return;
+        }
+
         setSnapshots(nextSnapshots);
         setFrameIndex(Math.max(0, nextSnapshots.length - 1));
       })
       .catch((error) => setMessage(error.message));
+
+    return () => {
+      active = false;
+    };
   }, [selectedCamera, selectedSummary?.snapshotCount, config.maxPlaybackFrames]);
 
   useEffect(() => {
